@@ -16,6 +16,8 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -44,9 +46,58 @@ func login(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// 验证Client端输入
+func validate(w http.ResponseWriter, r *http.Request) {
+	if r.Method == "GET" {
+		tpl, _ := template.ParseFiles("validate.gtpl")
+		tpl.Execute(w, nil)
+	} else {
+		r.ParseForm()
+
+		msg := ""
+		// 必填
+		if len(r.Form["username"]) == 0 {
+			msg += "用户名必填，不能为空！\n"
+		}
+		// 数字
+		_, err := strconv.Atoi(r.Form.Get("age"))
+		if nil != err {
+			msg += "年龄必须填写数字。\n"
+		}
+		// 中文
+		if m, _ := regexp.MatchString(`^\\p{Han}+$`, r.Form.Get("realname")); !m {
+			msg += "名字必做是中文！\n"
+		}
+		// 英文
+		if m, _ := regexp.MatchString(`^[a-zA-Z]+$`, r.Form.Get("english")); !m {
+			msg += "英文名必须是英文字母.\n"
+		}
+		// email
+		if m, _ := regexp.MatchString(`^([\w\.\_]{2,10})@(\w{1,})\.([a-z]{2,4})$`, r.Form.Get("email")); !m {
+			msg += "Email格式不正确。\n"
+		}
+		// 下拉菜单验证
+		fruits := []string{"apple", "pear", "banana"}
+		tmp := r.Form.Get("fruit")
+		tag := false
+		for _, e := range fruits {
+			if tmp == e {
+				tag = true
+				break
+			}
+		}
+		if !tag {
+			msg += "水果选择不正确。\n"
+		}
+		// write to browser
+		fmt.Fprintf(w, msg)
+	}
+}
+
 func main() {
 	http.HandleFunc("/", sayHello)
 	http.HandleFunc("/login", login)
+	http.HandleFunc("/val", validate)
 
 	err := http.ListenAndServe(":80", nil)
 	if nil != err {
