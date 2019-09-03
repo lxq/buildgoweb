@@ -12,20 +12,39 @@
 package main
 
 import (
+	"crypto/md5"
 	"fmt"
 	"html/template"
 	"io"
 	"net/http"
 	"os"
+	"strconv"
+	"time"
 )
 
 func upload(w http.ResponseWriter, r *http.Request) {
 	if "GET" == r.Method {
+		// 生成Server端验证的token，防止多次提交。
+		st := time.Now().Unix()
+		h := md5.New()
+		io.WriteString(h, strconv.FormatInt(st, 10))
+		token := fmt.Sprintf("%x", h.Sum(nil))
+		fmt.Printf("生成token：%s\n", token)
+
+		// 执行模板，并传递token。
 		tpl, _ := template.ParseFiles("upload.tpl")
-		tpl.Execute(w, nil)
+		tpl.Execute(w, token)
 	} else {
 		// 根据Form的enctype属性调用
 		r.ParseMultipartForm(32 << 20)
+		// 防止多次提交
+		token := r.Form.Get("token") // token 为隐藏input的名称
+		if "" != token {
+			// 验证token是否合法
+			fmt.Printf("网页token：%s\n", token)
+		} else {
+			// 非法的数据提交
+		}
 		// get file
 		f, h, err := r.FormFile("upfile") // 参数名为Form中属性为file的input的名称
 		if nil != err {
@@ -34,7 +53,7 @@ func upload(w http.ResponseWriter, r *http.Request) {
 		}
 		defer f.Close()
 
-		fmt.Fprintf(w, "文件头信息：%s\n", h.Header)
+		fmt.Fprintf(w, "%v\n", h.Header)
 		file, err := os.OpenFile("./upload/"+h.Filename, os.O_WRONLY|os.O_CREATE, 0666) // upload目录存在
 		if nil != err {
 			fmt.Println(err)
